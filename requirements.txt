@@ -9,4 +9,4 @@
  bandit>=1.7.5
  safety>=2.3.5
  pre-commit>=3.5.0
-typing-extensions>=4.7,<5.1  # для стабильности pydantic/aiogram на Py3.12
+typing-extensions>=4.7,<5.1  # для стабильности pydantic/aiogram на Py3.12  

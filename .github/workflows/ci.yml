@@ -57,7 +57,7 @@ jobs:
         
       - name: Run static analysis (Bandit + Safety)
         run: |
-          bandit --ini .bandit.ini -r
+          bandit -r .
           safety check || echo "Safety check failed but continuing..."
         
       - name: Run type checker (MyPy)
