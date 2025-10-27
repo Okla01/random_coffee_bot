@@ -19,7 +19,7 @@ async def send_otp_email(settings: Settings, to_email: str, otp_code: str) -> No
     Ошибки отдаём наверх — пусть ловятся на уровне хендлеров.
     """
     import ssl
-    
+
     msg = EmailMessage()
     msg["From"] = settings.smtp_from
     msg["To"] = to_email
@@ -29,11 +29,11 @@ async def send_otp_email(settings: Settings, to_email: str, otp_code: str) -> No
         f"Срок действия: {settings.otp_ttl_seconds} секунд.\n"
         "Если вы не запрашивали код — просто игнорируйте это письмо."
     )
-    
+
     # Создаём TLS-контекст с принудительным TLS 1.2+
     ctx = ssl.create_default_context()
     ctx.minimum_version = ssl.TLSVersion.TLSv1_2
-    
+
     await aiosmtplib.send(
         msg,
         hostname=settings.smtp_host,

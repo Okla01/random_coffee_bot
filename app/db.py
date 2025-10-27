@@ -31,7 +31,9 @@ def make_session_factory(engine) -> async_sessionmaker[AsyncSession]:
 
 
 @asynccontextmanager
-async def lifespan_db(settings: Settings) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+async def lifespan_db(
+    settings: Settings,
+) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     """
     Контекст жизненного цикла БД:
     - создаёт engine,

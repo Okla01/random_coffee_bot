@@ -5,7 +5,9 @@ Helper function for sending profile preview with photos.
 from aiogram.types import InputMediaPhoto
 
 
-async def _send_profile_preview_with_photos(bot, chat_id: int, user, state, reply_markup) -> None:
+async def _send_profile_preview_with_photos(
+    bot, chat_id: int, user, state, reply_markup
+) -> None:
     """Send profile preview with user photos.
 
     Behavior:

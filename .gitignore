@@ -30,7 +30,6 @@ logs/
 *.log
 .env
 .env.*
-!.env.example
 
 # Distribution / packaging
 dist/
@@ -50,3 +49,7 @@ coverage.xml
 .vscode/
 *.code-workspace
 .history/
+
+# local CI
+.bandit.ini
+.pre-commit-config.yaml

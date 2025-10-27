@@ -36,6 +36,7 @@ router = Router()
 
 # --------------------------- helpers ---------------------------- #
 
+
 async def _user(session: AsyncSession, tg_id: int) -> User:
     """Возвращает пользователя или создаёт нового (status=new, stage=new, origin='self')."""
     res = await session.execute(select(User).where(User.telegram_id == tg_id))
@@ -43,26 +44,41 @@ async def _user(session: AsyncSession, tg_id: int) -> User:
     if user:
         return user
     # Если пользователя нет — создаём (аналогично /start)
-    user = User(telegram_id=tg_id, username=None, status="new", stage="new", origin="self")
+    user = User(
+        telegram_id=tg_id, username=None, status="new", stage="new", origin="self"
+    )
     session.add(user)
     await session.flush()
     return user
 
 
-async def _log_attempt(session: AsyncSession, user_id: int, typ: str, value: str) -> None:
+async def _log_attempt(
+    session: AsyncSession, user_id: int, typ: str, value: str
+) -> None:
     # Сохраним попытку и оставим только последние 3 для данного user_id/type
     session.add(AuthAttempt(user_id=user_id, type=typ, value=value))
     await session.flush()
     # Оставляем только последние 3 записи; удаляем более старые
-    q = select(AuthAttempt).where(AuthAttempt.user_id == user_id, AuthAttempt.type == typ).order_by(desc(AuthAttempt.ts))
+    q = (
+        select(AuthAttempt)
+        .where(AuthAttempt.user_id == user_id, AuthAttempt.type == typ)
+        .order_by(desc(AuthAttempt.ts))
+    )
     rows = list((await session.execute(q)).scalars())
     if len(rows) > 3:
         for old in rows[3:]:
             session.delete(old)
 
 
-async def _last_attempts(session: AsyncSession, user_id: int, typ: str, limit: int = 3) -> list[AuthAttempt]:
-    q = select(AuthAttempt).where(AuthAttempt.user_id == user_id, AuthAttempt.type == typ).order_by(desc(AuthAttempt.ts)).limit(limit)
+async def _last_attempts(
+    session: AsyncSession, user_id: int, typ: str, limit: int = 3
+) -> list[AuthAttempt]:
+    q = (
+        select(AuthAttempt)
+        .where(AuthAttempt.user_id == user_id, AuthAttempt.type == typ)
+        .order_by(desc(AuthAttempt.ts))
+        .limit(limit)
+    )
     return list((await session.execute(q)).scalars())
 
 
@@ -72,13 +88,17 @@ async def _clear_last_kb(state: FSMContext, chat_id: int, bot) -> None:
     mid = data.get("last_kb_mid")
     if mid:
         try:
-            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=mid, reply_markup=None)
+            await bot.edit_message_reply_markup(
+                chat_id=chat_id, message_id=mid, reply_markup=None
+            )
         except Exception:
             pass
         await state.update_data(last_kb_mid=None)
 
 
-async def _send_or_resend_otp(session: AsyncSession, settings: Settings, user: User) -> tuple[bool, str | None]:
+async def _send_or_resend_otp(
+    session: AsyncSession, settings: Settings, user: User
+) -> tuple[bool, str | None]:
     """
     Создаёт новую "сессию" OTP, либо переотправляет существующую с соблюдением ограничений:
     - не чаще 1 раза в 120 секунд,
@@ -88,12 +108,16 @@ async def _send_or_resend_otp(session: AsyncSession, settings: Settings, user: U
     now = now_utc()
 
     existing = (
-        await session.execute(
-            select(Otp)
-            .where(Otp.user_id == user.id, Otp.used_at.is_(None))
-            .order_by(desc(Otp.created_at))
+        (
+            await session.execute(
+                select(Otp)
+                .where(Otp.user_id == user.id, Otp.used_at.is_(None))
+                .order_by(desc(Otp.created_at))
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
 
     warn: str | None = None
 
@@ -102,7 +126,11 @@ async def _send_or_resend_otp(session: AsyncSession, settings: Settings, user: U
         ex_last_sent_at = ensure_aware_utc(existing.last_sent_at)
 
         if ex_expires_at and ex_expires_at > now:
-            if ex_last_sent_at and (ex_last_sent_at + timedelta(seconds=settings.otp_cooldown_seconds)) > now:
+            if (
+                ex_last_sent_at
+                and (ex_last_sent_at + timedelta(seconds=settings.otp_cooldown_seconds))
+                > now
+            ):
                 warn = "Повторная отправка возможна не чаще, чем раз в 120 секунд."
             else:
                 if existing.resend_count >= settings.resend_max_per_session:
@@ -133,7 +161,13 @@ async def _send_or_resend_otp(session: AsyncSession, settings: Settings, user: U
 
 
 async def _notify_admin_on_block(
-    session: AsyncSession, settings: Settings, user: User, reason: str, typ: str, bot, sender_name: str
+    session: AsyncSession,
+    settings: Settings,
+    user: User,
+    reason: str,
+    typ: str,
+    bot,
+    sender_name: str,
 ) -> None:
     """
     Создаёт запись в admin_log и отправляет уведомление в admin_chat (с кнопками блок/разблок).
@@ -141,7 +175,12 @@ async def _notify_admin_on_block(
     if not settings.admin_chat_id:
         return
     attempts = await _last_attempts(session, user.id, typ)
-    payload = {"user_id": user.id, "reason": reason, "type": typ, "attempts": [a.value for a in attempts]}
+    payload = {
+        "user_id": user.id,
+        "reason": reason,
+        "type": typ,
+        "attempts": [a.value for a in attempts],
+    }
     session.add(
         AdminLog(
             admin_telegram_id=0,
@@ -161,13 +200,18 @@ async def _notify_admin_on_block(
             f"Причина: {reason}\n"
             f"Последние {typ} попытки: {', '.join([a.value for a in attempts]) if attempts else 'нет данных'}"
         )
-        await bot.send_message(chat_id=settings.admin_chat_id, text=text, reply_markup=kb_admin_decision(user.id))
+        await bot.send_message(
+            chat_id=settings.admin_chat_id,
+            text=text,
+            reply_markup=kb_admin_decision(user.id),
+        )
     except Exception:
         # Не фейлим основную операцию из-за ошибки отправки нотификации
         pass
 
 
 # ------------------------- email / code ------------------------- #
+
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def on_email_or_code(
@@ -183,7 +227,13 @@ async def on_email_or_code(
     async with session_factory() as session:
         user = await _user(session, message.from_user.id)
         # Обрабатываем только свои стадии — если не наша стадия, отменяем обработчик
-        if user.stage not in {"new", "verifying_email", "verifying_email_error", "verifying_code", "verifying_code_error"}:
+        if user.stage not in {
+            "new",
+            "verifying_email",
+            "verifying_email_error",
+            "verifying_code",
+            "verifying_code_error",
+        }:
             await session.commit()
             raise SkipHandler()
 
@@ -195,7 +245,9 @@ async def on_email_or_code(
 
         if user.status == "blocked":
             await session.commit()
-            await message.answer("Доступ временно заблокирован. Свяжитесь с администратором.")
+            await message.answer(
+                "Доступ временно заблокирован. Свяжитесь с администратором."
+            )
             return
 
         # E-MAIL
@@ -204,7 +256,11 @@ async def on_email_or_code(
             await _log_attempt(session, user.id, "email", email)
 
             exists = (
-                await session.execute(select(User).where(User.email == email, User.telegram_id != user.telegram_id))
+                await session.execute(
+                    select(User).where(
+                        User.email == email, User.telegram_id != user.telegram_id
+                    )
+                )
             ).scalar_one_or_none()
             if exists:
                 await session.commit()
@@ -213,21 +269,33 @@ async def on_email_or_code(
                 )
                 return
 
-            ok, err = validate_email(email, settings.email_regex, settings.allowed_domains)
+            ok, err = validate_email(
+                email, settings.email_regex, settings.allowed_domains
+            )
             if not ok:
                 user.email_attempts += 1
                 user.stage = "verifying_email"
                 if user.email_attempts > settings.email_max_attempts:
                     user.status = "blocked"
                     user.stage = "verifying_email_error"
-                    await _notify_admin_on_block(session, settings, user, "Слишком много неверных адресов", "email", message.bot, message.from_user.full_name)
+                    await _notify_admin_on_block(
+                        session,
+                        settings,
+                        user,
+                        "Слишком много неверных адресов",
+                        "email",
+                        message.bot,
+                        message.from_user.full_name,
+                    )
                     await session.commit()
                     await message.answer(
                         "Слишком много неверных адресов. Доступ заблокирован, администратор уведомлён, ожидайте решения."
                     )
                     return
                 await session.commit()
-                await message.answer(f"⚠️ {err}\nПопробуйте ещё раз (корпоративный e-mail).\nПопыток осталось: {settings.email_max_attempts - user.email_attempts + 1}")
+                await message.answer(
+                    f"⚠️ {err}\nПопробуйте ещё раз (корпоративный e-mail).\nПопыток осталось: {settings.email_max_attempts - user.email_attempts + 1}"
+                )
                 return
 
             user.email = email
@@ -235,7 +303,9 @@ async def on_email_or_code(
             user.stage = "verifying_code"
             ok, warn = await _send_or_resend_otp(session, settings, user)
             await session.commit()
-            msg = "Отправили 6-значный код на вашу почту. Введите его в течение 2 минут."
+            msg = (
+                "Отправили 6-значный код на вашу почту. Введите его в течение 2 минут."
+            )
             if warn:
                 msg += f"\n⚠️ {warn}"
             sent = await message.answer(msg, reply_markup=kb_auth_code_wait())
@@ -254,10 +324,16 @@ async def on_email_or_code(
 
             now = now_utc()
             otp_row = (
-                await session.execute(
-                    select(Otp).where(Otp.user_id == user.id).order_by(desc(Otp.created_at))
+                (
+                    await session.execute(
+                        select(Otp)
+                        .where(Otp.user_id == user.id)
+                        .order_by(desc(Otp.created_at))
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
 
             if not otp_row:
                 await session.commit()
@@ -282,7 +358,10 @@ async def on_email_or_code(
 
             if used_at:
                 await session.commit()
-                sent = await message.answer("Код уже был использован. Запросите новый.", reply_markup=kb_auth_code_wait())
+                sent = await message.answer(
+                    "Код уже был использован. Запросите новый.",
+                    reply_markup=kb_auth_code_wait(),
+                )
                 await state.update_data(last_kb_mid=sent.message_id)
                 return
 
@@ -292,14 +371,25 @@ async def on_email_or_code(
                 if user.otp_attempts > settings.otp_max_attempts:
                     user.status = "blocked"
                     user.stage = "verifying_code_error"
-                    await _notify_admin_on_block(session, settings, user, "Слишком много неверных OTP-кодов", "otp", message.bot, message.from_user.full_name)
+                    await _notify_admin_on_block(
+                        session,
+                        settings,
+                        user,
+                        "Слишком много неверных OTP-кодов",
+                        "otp",
+                        message.bot,
+                        message.from_user.full_name,
+                    )
                     await session.commit()
                     await message.answer(
                         "Слишком много неверных попыток. Доступ заблокирован, администратор уведомлён, ожидайте решения."
                     )
                     return
                 await session.commit()
-                sent = await message.answer(f"Неверный код. Попробуйте ещё раз или запросите новый.\nПопыток осталось: {settings.otp_max_attempts - user.otp_attempts + 1}", reply_markup=kb_auth_code_wait())
+                sent = await message.answer(
+                    f"Неверный код. Попробуйте ещё раз или запросите новый.\nПопыток осталось: {settings.otp_max_attempts - user.otp_attempts + 1}",
+                    reply_markup=kb_auth_code_wait(),
+                )
                 await state.update_data(last_kb_mid=sent.message_id)
                 return
 
@@ -310,7 +400,9 @@ async def on_email_or_code(
             user.email_attempts = 0
             user.otp_attempts = 0
             await session.commit()
-            sent = await message.answer("Успешная авторизация! ✅", reply_markup=kb_start_authorized())
+            sent = await message.answer(
+                "Успешная авторизация! ✅", reply_markup=kb_start_authorized()
+            )
             await state.update_data(last_kb_mid=sent.message_id)
             return
 
@@ -319,6 +411,7 @@ async def on_email_or_code(
 
 
 # ------------------------ callbacks: resend/change -------------- #
+
 
 @router.callback_query(F.data == "otp:resend")
 async def cb_otp_resend(
@@ -339,7 +432,9 @@ async def cb_otp_resend(
 
         if user.status == "blocked":
             await session.commit()
-            await cq.message.answer("Доступ временно заблокирован. Свяжитесь с администратором.")
+            await cq.message.answer(
+                "Доступ временно заблокирован. Свяжитесь с администратором."
+            )
             await cq.answer()
             return
 
@@ -350,8 +445,13 @@ async def cb_otp_resend(
 
         ok, warn = await _send_or_resend_otp(session, settings, user)
         await session.commit()
-        sent = await cq.message.answer(("Код отправлен повторно." if ok else "Не удалось отправить код.") + (f"\n⚠️ {warn}" if warn else ""))
-        await state.update_data(last_kb_mid=None)  # текущего клавиатурного сообщения уже нет
+        await cq.message.answer(
+            ("Код отправлен повторно." if ok else "Не удалось отправить код.")
+            + (f"\n⚠️ {warn}" if warn else "")
+        )
+        await state.update_data(
+            last_kb_mid=None
+        )  # текущего клавиатурного сообщения уже нет
         await cq.answer()
 
 
@@ -373,7 +473,9 @@ async def cb_change_email(
 
         if user.status == "blocked":
             await session.commit()
-            await cq.message.answer("Доступ временно заблокирован. Свяжитесь с администратором.")
+            await cq.message.answer(
+                "Доступ временно заблокирован. Свяжитесь с администратором."
+            )
             await cq.answer()
             return
 

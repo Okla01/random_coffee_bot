@@ -18,14 +18,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..config import Settings
-from ..keyboards import kb_admin_decision
-from ..models import User, Role, UserRole, AdminLog, AuthAttempt
+from ..models import User, Role, UserRole, AdminLog
 
 router = Router()
 
 
 async def _get_user(session: AsyncSession, tg_id: int) -> User | None:
-    return (await session.execute(select(User).where(User.telegram_id == tg_id))).scalar_one_or_none()
+    return (
+        await session.execute(select(User).where(User.telegram_id == tg_id))
+    ).scalar_one_or_none()
 
 
 async def _is_admin(session: AsyncSession, settings: Settings, tg_id: int) -> bool:
@@ -41,20 +42,30 @@ async def _is_admin(session: AsyncSession, settings: Settings, tg_id: int) -> bo
 
     if tg_id in settings.admin_ids:
         # синхронизируем роль
-        role = (await session.execute(select(Role).where(Role.name == "admin"))).scalar_one_or_none()
+        role = (
+            await session.execute(select(Role).where(Role.name == "admin"))
+        ).scalar_one_or_none()
         if not role:
             role = Role(name="admin")
             session.add(role)
             await session.flush()
         link = (
-            await session.execute(select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id))
+            await session.execute(
+                select(UserRole).where(
+                    UserRole.user_id == user.id, UserRole.role_id == role.id
+                )
+            )
         ).scalar_one_or_none()
         if not link:
             session.add(UserRole(user_id=user.id, role_id=role.id))
             await session.flush()
 
     # проверяем по ролям
-    q = select(Role).join(UserRole, UserRole.role_id == Role.id).where(UserRole.user_id == user.id, Role.name == "admin")
+    q = (
+        select(Role)
+        .join(UserRole, UserRole.role_id == Role.id)
+        .where(UserRole.user_id == user.id, Role.name == "admin")
+    )
     return (await session.execute(q)).scalar_one_or_none() is not None
 
 
@@ -99,7 +110,9 @@ async def cmd_admin(
         )
         await session.commit()
 
-        await message.answer("Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.")
+        await message.answer(
+            "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках."
+        )
 
 
 @router.callback_query()
@@ -119,7 +132,9 @@ async def admin_callbacks(
 
         _, action, user_id_str = data.split(":")
         target_id = int(user_id_str)
-        user = (await session.execute(select(User).where(User.id == target_id))).scalar_one_or_none()
+        user = (
+            await session.execute(select(User).where(User.id == target_id))
+        ).scalar_one_or_none()
         if not user:
             await cq.answer("Пользователь не найден")
             return
@@ -127,17 +142,29 @@ async def admin_callbacks(
         reviewed_by = cq.from_user.username or str(cq.from_user.id)
         if action == "block":
             user.status = "blocked"
-            session.add(AdminLog(admin_telegram_id=cq.from_user.id, action="block", payload={"user_id": user.id}))
+            session.add(
+                AdminLog(
+                    admin_telegram_id=cq.from_user.id,
+                    action="block",
+                    payload={"user_id": user.id},
+                )
+            )
             await session.commit()
             # Отредактируем исходное сообщение заявки: отметим решение и уберём кнопки
             try:
-                await cq.message.edit_text(cq.message.text + f"\n\nРешение: Пользователь {'@' + user.username} заблокирован.\n👨‍💻Рассмотрел: {'@' + reviewed_by}")
+                await cq.message.edit_text(
+                    cq.message.text
+                    + f"\n\nРешение: Пользователь {'@' + user.username} заблокирован.\n👨‍💻Рассмотрел: {'@' + reviewed_by}"
+                )
             except Exception:
                 pass
             # Попробуем уведомить пользователя
             if user.telegram_id:
                 try:
-                    await cq.message.bot.send_message(user.telegram_id, "Решение по временной блокировке: Вам закрыт доступ. Если считаете это ошибкой - обратитесь к администратору.")
+                    await cq.message.bot.send_message(
+                        user.telegram_id,
+                        "Решение по временной блокировке: Вам закрыт доступ. Если считаете это ошибкой - обратитесь к администратору.",
+                    )
                 except Exception:
                     pass
         else:
@@ -146,17 +173,29 @@ async def admin_callbacks(
             user.stage = "verifying_email"
             user.email_attempts = 0
             user.otp_attempts = 0
-            session.add(AdminLog(admin_telegram_id=cq.from_user.id, action="unblock", payload={"user_id": user.id}))
+            session.add(
+                AdminLog(
+                    admin_telegram_id=cq.from_user.id,
+                    action="unblock",
+                    payload={"user_id": user.id},
+                )
+            )
             await session.commit()
             # Редактируем исходное сообщение заявки
             try:
-                await cq.message.edit_text(cq.message.text + f"\n\nРешение: Пользователь {'@' + user.username} разблокирован и возвращён к вводу корпоративного e‑mail.\n👨‍💻Рассмотрел: {'@' + reviewed_by}")
+                await cq.message.edit_text(
+                    cq.message.text
+                    + f"\n\nРешение: Пользователь {'@' + user.username} разблокирован и возвращён к вводу корпоративного e‑mail.\n👨‍💻Рассмотрел: {'@' + reviewed_by}"
+                )
             except Exception:
                 pass
             # Уведомляем пользователя
             if user.telegram_id:
                 try:
-                    await cq.message.bot.send_message(user.telegram_id, "Решение по временной блокировке: Вас разблокировали. Пожалуйста, пройдите регистрацию заново и введите корпоративный e‑mail:")
+                    await cq.message.bot.send_message(
+                        user.telegram_id,
+                        "Решение по временной блокировке: Вас разблокировали. Пожалуйста, пройдите регистрацию заново и введите корпоративный e‑mail:",
+                    )
                 except Exception:
                     pass
         # Убираем inline-кнопки у исходного сообщения, если они остались

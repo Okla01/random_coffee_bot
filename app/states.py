@@ -9,6 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 class AuthStates(StatesGroup):
     """Состояния авторизации (email → code)."""
+
     verifying_email = State()
     verifying_email_error = State()
     verifying_code = State()
@@ -18,6 +19,7 @@ class AuthStates(StatesGroup):
 
 class ProfileStates(StatesGroup):
     """Состояния анкеты."""
+
     profile_name = State()
     profile_photo = State()
     profile_bio = State()

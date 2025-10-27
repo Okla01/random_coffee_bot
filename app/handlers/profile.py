@@ -32,13 +32,16 @@ router = Router()
 
 # --------------------------- helpers ---------------------------- #
 
+
 async def _user(session: AsyncSession, tg_id: int) -> User:
     res = await session.execute(select(User).where(User.telegram_id == tg_id))
     user = res.scalar_one_or_none()
     if user:
         return user
     # Если пользователя нет — создаём (аналогично /start)
-    user = User(telegram_id=tg_id, username=None, status="new", stage="new", origin="self")
+    user = User(
+        telegram_id=tg_id, username=None, status="new", stage="new", origin="self"
+    )
     session.add(user)
     await session.flush()
     return user
@@ -72,7 +75,9 @@ def _preview_text(user: User) -> str:
     return "\n".join(lines)
 
 
-async def _send_profile_preview_with_photos(bot, chat_id: int, user: User, state: FSMContext, reply_markup) -> None:
+async def _send_profile_preview_with_photos(
+    bot, chat_id: int, user: User, state: FSMContext, reply_markup
+) -> None:
     """Send profile preview with user photos.
 
     Behavior:
@@ -112,13 +117,16 @@ async def _clear_last_kb(state: FSMContext, chat_id: int, bot) -> None:
     mid = data.get("last_kb_mid")
     if mid:
         try:
-            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=mid, reply_markup=None)
+            await bot.edit_message_reply_markup(
+                chat_id=chat_id, message_id=mid, reply_markup=None
+            )
         except Exception:
             pass
         await state.update_data(last_kb_mid=None)
 
 
 # --------------------------- entry point ------------------------ #
+
 
 @router.callback_query(F.data == "prof:start")
 async def cb_prof_start(
@@ -139,7 +147,9 @@ async def cb_prof_start(
 
         if user.status == "blocked":
             await session.commit()
-            await cq.message.answer("Доступ временно заблокирован. Свяжитесь с администратором.")
+            await cq.message.answer(
+                "Доступ временно заблокирован. Свяжитесь с администратором."
+            )
             await cq.answer()
             return
 
@@ -199,13 +209,19 @@ async def cb_prof_start(
             await cq.message.answer("Введите ваш возраст (18–50):")
             await state.update_data(last_kb_mid=None)
         elif user.stage == "profile_interests":
-            await cq.message.answer("Перечислите интересы через запятую (например: Python, музыка, дизайн).")
+            await cq.message.answer(
+                "Перечислите интересы через запятую (например: Python, музыка, дизайн)."
+            )
             await state.update_data(last_kb_mid=None)
         elif user.stage == "profile_review":
             # send preview with attached photos (if any)
-            await _send_profile_preview_with_photos(cq.message.bot, cq.message.chat.id, user, state, kb_profile_review())
+            await _send_profile_preview_with_photos(
+                cq.message.bot, cq.message.chat.id, user, state, kb_profile_review()
+            )
         elif user.stage == "profile_filled":
-            sent = await cq.message.answer(_preview_text(user), reply_markup=kb_profile_filled())
+            sent = await cq.message.answer(
+                _preview_text(user), reply_markup=kb_profile_filled()
+            )
             await state.update_data(last_kb_mid=sent.message_id)
 
         await cq.answer()
@@ -213,7 +229,10 @@ async def cb_prof_start(
 
 @router.callback_query(F.data == "prof:prefilled:keep")
 async def cb_prefilled_keep(
-    cq: CallbackQuery, state: FSMContext, session_factory: async_sessionmaker[AsyncSession], settings: Settings
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
 ) -> None:
     try:
         await cq.message.edit_reply_markup(reply_markup=None)
@@ -235,7 +254,10 @@ async def cb_prefilled_keep(
 
 @router.callback_query(F.data == "prof:prefilled:new")
 async def cb_prefilled_new(
-    cq: CallbackQuery, state: FSMContext, session_factory: async_sessionmaker[AsyncSession], settings: Settings
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
 ) -> None:
     try:
         await cq.message.edit_reply_markup(reply_markup=None)
@@ -252,6 +274,7 @@ async def cb_prefilled_new(
 
 # --------------------------- text steps ------------------------- #
 
+
 @router.message(F.text & ~F.text.startswith("/"))
 async def on_profile_text(
     message: Message,
@@ -266,7 +289,12 @@ async def on_profile_text(
         user = await _user(session, message.from_user.id)
 
         # обрабатываем только свои стадии — если не наша стадия, отменяем обработчик
-        if user.stage not in {"profile_name", "profile_bio", "profile_age", "profile_interests"}:
+        if user.stage not in {
+            "profile_name",
+            "profile_bio",
+            "profile_age",
+            "profile_interests",
+        }:
             await session.commit()
             raise SkipHandler()
 
@@ -278,18 +306,24 @@ async def on_profile_text(
 
         if user.status == "blocked":
             await session.commit()
-            await message.answer("Доступ временно заблокирован. Свяжитесь с администратором.")
+            await message.answer(
+                "Доступ временно заблокирован. Свяжитесь с администратором."
+            )
             return
 
         # NAME
         if user.stage == "profile_name":
             if not (2 <= len(text) <= 100):
-                await message.answer("⚠️ Имя должно быть от 2 до 100 символов. Попробуйте ещё раз.")
+                await message.answer(
+                    "⚠️ Имя должно быть от 2 до 100 символов. Попробуйте ещё раз."
+                )
                 await session.commit()
                 return
             bad, word = contains_banned_words(text, settings.banned_words)
             if bad:
-                await message.answer(f"⚠️ Имя содержит запрещённое слово «{word}». Введите другое.")
+                await message.answer(
+                    f"⚠️ Имя содержит запрещённое слово «{word}». Введите другое."
+                )
                 await session.commit()
                 return
             user.name = text
@@ -310,7 +344,9 @@ async def on_profile_text(
                 return
             bad, word = contains_banned_words(text, settings.banned_words)
             if bad:
-                await message.answer(f"⚠️ Текст содержит запрещённое слово «{word}». Исправьте, пожалуйста.")
+                await message.answer(
+                    f"⚠️ Текст содержит запрещённое слово «{word}». Исправьте, пожалуйста."
+                )
                 await session.commit()
                 return
             user.bio = text
@@ -334,7 +370,9 @@ async def on_profile_text(
             user.age = age
             user.stage = "profile_interests"
             await session.commit()
-            await message.answer("Перечислите интересы через запятую (например: Python, музыка, дизайн).")
+            await message.answer(
+                "Перечислите интересы через запятую (например: Python, музыка, дизайн)."
+            )
             await state.update_data(last_kb_mid=None)
             return
 
@@ -349,15 +387,21 @@ async def on_profile_text(
             user.stage = "profile_review"
             await session.commit()
             # send preview with attached photos (if any)
-            await _send_profile_preview_with_photos(message.bot, message.chat.id, user, state, kb_profile_review())
+            await _send_profile_preview_with_photos(
+                message.bot, message.chat.id, user, state, kb_profile_review()
+            )
             return
 
 
 # --------------------------- photo ------------------------------ #
 
+
 @router.callback_query(F.data == "prof:photo:from_profile")
 async def cb_photo_from_profile(
-    cq: CallbackQuery, state: FSMContext, session_factory: async_sessionmaker[AsyncSession], settings: Settings
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
 ) -> None:
     try:
         await cq.message.edit_reply_markup(reply_markup=None)
@@ -385,14 +429,19 @@ async def cb_photo_from_profile(
 
         user.stage = "profile_bio"
         await session.commit()
-        await cq.message.answer("Фото добавлены. Теперь расскажите о себе (до 500 символов):")
+        await cq.message.answer(
+            "Фото добавлены. Теперь расскажите о себе (до 500 символов):"
+        )
         await state.update_data(last_kb_mid=None)
         await cq.answer()
 
 
 @router.callback_query(F.data == "prof:photo:skip")
 async def cb_photo_skip(
-    cq: CallbackQuery, state: FSMContext, session_factory: async_sessionmaker[AsyncSession], settings: Settings
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
 ) -> None:
     try:
         await cq.message.edit_reply_markup(reply_markup=None)
@@ -407,7 +456,9 @@ async def cb_photo_skip(
             return
         user.stage = "profile_bio"
         await session.commit()
-        await cq.message.answer("Хорошо, можно без фото. Расскажите о себе (до 500 символов):")
+        await cq.message.answer(
+            "Хорошо, можно без фото. Расскажите о себе (до 500 символов):"
+        )
         await state.update_data(last_kb_mid=None)
         await cq.answer()
 
@@ -440,21 +491,29 @@ async def on_photo(
         if _photos_count(user) >= 3:
             user.stage = "profile_bio"
             await session.commit()
-            await message.answer("Принял 3 фото. Теперь расскажите о себе (до 500 символов):")
+            await message.answer(
+                "Принял 3 фото. Теперь расскажите о себе (до 500 символов):"
+            )
             await state.update_data(last_kb_mid=None)
             return
 
         await session.commit()
-        sent = await message.answer(f"Фото сохранено ({_photos_count(user)}/3). Можно отправить ещё или нажать «Пропустить ▶️».")
+        await message.answer(
+            f"Фото сохранено ({_photos_count(user)}/3). Можно отправить ещё или нажать «Пропустить ▶️»."
+        )
         await state.update_data(last_kb_mid=None)  # без клавиатуры
         return
 
 
 # --------------------------- review / save ---------------------- #
 
+
 @router.callback_query(F.data == "prof:save")
 async def cb_prof_save(
-    cq: CallbackQuery, state: FSMContext, session_factory: async_sessionmaker[AsyncSession], settings: Settings
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
 ) -> None:
     try:
         await cq.message.edit_reply_markup(reply_markup=None)
@@ -464,14 +523,19 @@ async def cb_prof_save(
         user = await _user(session, cq.from_user.id)
         user.stage = "profile_filled"
         await session.commit()
-        sent = await cq.message.answer("Анкета сохранена! 🎉", reply_markup=kb_profile_filled())
+        sent = await cq.message.answer(
+            "Анкета сохранена! 🎉", reply_markup=kb_profile_filled()
+        )
         await state.update_data(last_kb_mid=sent.message_id)
         await cq.answer()
 
 
 @router.callback_query(F.data == "prof:edit:review")
 async def cb_prof_edit_review(
-    cq: CallbackQuery, state: FSMContext, session_factory: async_sessionmaker[AsyncSession], settings: Settings
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
 ) -> None:
     try:
         await cq.message.edit_reply_markup(reply_markup=None)
@@ -482,13 +546,18 @@ async def cb_prof_edit_review(
         user.stage = "profile_review"
         await session.commit()
         # send preview with attached photos (if any)
-        await _send_profile_preview_with_photos(cq.message.bot, cq.message.chat.id, user, state, kb_profile_review())
+        await _send_profile_preview_with_photos(
+            cq.message.bot, cq.message.chat.id, user, state, kb_profile_review()
+        )
         await cq.answer()
 
 
 @router.callback_query(F.data.startswith("prof:edit:"))
 async def cb_prof_edit_field(
-    cq: CallbackQuery, state: FSMContext, session_factory: async_sessionmaker[AsyncSession], settings: Settings
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
 ) -> None:
     try:
         await cq.message.edit_reply_markup(reply_markup=None)
@@ -505,7 +574,10 @@ async def cb_prof_edit_field(
         elif field == "photo":
             user.stage = "profile_photo"
             await session.commit()
-            sent = await cq.message.answer("Отправьте до 3 фото (можно альбомом) или нажмите:", reply_markup=kb_profile_photo())
+            sent = await cq.message.answer(
+                "Отправьте до 3 фото (можно альбомом) или нажмите:",
+                reply_markup=kb_profile_photo(),
+            )
             await state.update_data(last_kb_mid=sent.message_id)
         elif field == "bio":
             user.stage = "profile_bio"
@@ -527,12 +599,17 @@ async def cb_prof_edit_field(
 
 @router.callback_query(F.data == "prof:join")
 async def cb_prof_join(
-    cq: CallbackQuery, state: FSMContext, session_factory: async_sessionmaker[AsyncSession], settings: Settings
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
 ) -> None:
     try:
         await cq.message.edit_reply_markup(reply_markup=None)
     except Exception:
         pass
-    await cq.message.answer("Отлично! Вы будете участвовать в подборе, когда это станет доступно.")
+    await cq.message.answer(
+        "Отлично! Вы будете участвовать в подборе, когда это станет доступно."
+    )
     await state.update_data(last_kb_mid=None)
     await cq.answer()

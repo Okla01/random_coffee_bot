@@ -31,7 +31,9 @@ async def _clear_last_kb(state: FSMContext, chat_id: int, bot) -> None:
     mid = data.get("last_kb_mid")
     if mid:
         try:
-            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=mid, reply_markup=None)
+            await bot.edit_message_reply_markup(
+                chat_id=chat_id, message_id=mid, reply_markup=None
+            )
         except Exception:
             pass
         await state.update_data(last_kb_mid=None)
@@ -46,7 +48,9 @@ async def cmd_start(
 ) -> None:
     """Обрабатывает /start по сценарию ТЗ (восстановление текущей стадии)."""
     async with session_factory() as session:
-        user = await _get_or_create_user(session, message.from_user.id, message.from_user.username)
+        user = await _get_or_create_user(
+            session, message.from_user.id, message.from_user.username
+        )
         user.last_activity = datetime.now(timezone.utc)
 
         # гасим старые кнопки, если есть
@@ -54,7 +58,9 @@ async def cmd_start(
 
         if user.status == "blocked":
             await session.commit()
-            await message.answer("Доступ временно заблокирован. Свяжитесь с администратором.")
+            await message.answer(
+                "Доступ временно заблокирован. Свяжитесь с администратором."
+            )
             return
 
         # регистрация e-mail
@@ -81,7 +87,10 @@ async def cmd_start(
         # авторизован — предлагаем перейти к анкете
         if user.stage == "authorized":
             await session.commit()
-            sent = await message.answer("Успешная авторизация! Перейдём к анкете.", reply_markup=kb_start_authorized())
+            sent = await message.answer(
+                "Успешная авторизация! Перейдём к анкете.",
+                reply_markup=kb_start_authorized(),
+            )
             await state.update_data(last_kb_mid=sent.message_id)
             return
 
@@ -91,7 +100,10 @@ async def cmd_start(
             await session.commit()
             # import helper to use same preview logic
             from .profile import _send_profile_preview_with_photos
-            await _send_profile_preview_with_photos(message.bot, message.chat.id, user, state, kb_profile_filled())
+
+            await _send_profile_preview_with_photos(
+                message.bot, message.chat.id, user, state, kb_profile_filled()
+            )
             return
 
         if user.stage in {
@@ -103,7 +115,10 @@ async def cmd_start(
             "profile_review",
         }:
             await session.commit()
-            sent = await message.answer("Продолжим заполнение анкеты. Нажмите «Анкета 🪪».", reply_markup=kb_start_authorized())
+            sent = await message.answer(
+                "Продолжим заполнение анкеты. Нажмите «Анкета 🪪».",
+                reply_markup=kb_start_authorized(),
+            )
             await state.update_data(last_kb_mid=sent.message_id)
             return
 
@@ -126,14 +141,18 @@ def _profile_preview_text(user: User) -> str:
     return "\n".join(lines)
 
 
-async def _get_or_create_user(session: AsyncSession, tg_id: int, username: str | None) -> User:
+async def _get_or_create_user(
+    session: AsyncSession, tg_id: int, username: str | None
+) -> User:
     res = await session.execute(select(User).where(User.telegram_id == tg_id))
     user = res.scalar_one_or_none()
     if user:
         if username and user.username != username:
             user.username = username
         return user
-    user = User(telegram_id=tg_id, username=username, status="new", stage="new", origin="self")
+    user = User(
+        telegram_id=tg_id, username=username, status="new", stage="new", origin="self"
+    )
     session.add(user)
     await session.flush()
     return user

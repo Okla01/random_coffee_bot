@@ -15,7 +15,7 @@ from .middlewares.db_session import DbSessionMiddleware
 
 # handlers
 from .handlers.start import router as start_router
-from .handlers.profile import router as profile_router      # ← раньше
+from .handlers.profile import router as profile_router  # ← раньше
 from .handlers.registration import router as registration_router  # ← после анкеты
 from .handlers.admin import router as admin_router
 
@@ -25,7 +25,7 @@ async def create_dispatcher(settings: Settings) -> Dispatcher:
     setup_logging(settings.log_level)
     dp = Dispatcher()
     dp.include_router(start_router)
-    dp.include_router(profile_router)       # важно: анкета выше
+    dp.include_router(profile_router)  # важно: анкета выше
     dp.include_router(registration_router)  # регистрация ниже
     dp.include_router(admin_router)
     return dp

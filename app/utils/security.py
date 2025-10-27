@@ -5,17 +5,19 @@
 
 from __future__ import annotations
 
-import random
+import secrets
 import re
-from typing import Iterable, Tuple, List
+from typing import Iterable, List
 
 
 def generate_otp(length: int = 6) -> str:
-    """Генерирует цифровой OTP-код фиксированной длины."""
-    return "".join(random.choice("0123456789") for _ in range(length))
+    """Генерирует криптографически стойкий OTP-код фиксированной длины."""
+    return "".join(secrets.choice("0123456789") for _ in range(length))
 
 
-def validate_email(email: str, regex: re.Pattern[str], allowed_domains: set[str]) -> tuple[bool, str | None]:
+def validate_email(
+    email: str, regex: re.Pattern[str], allowed_domains: set[str]
+) -> tuple[bool, str | None]:
     """
     Валидация e-mail:
     - соответствие regex;
@@ -33,7 +35,9 @@ def validate_email(email: str, regex: re.Pattern[str], allowed_domains: set[str]
     return True, None
 
 
-def contains_banned_words(text: str, banned_words: Iterable[str]) -> tuple[bool, str | None]:
+def contains_banned_words(
+    text: str, banned_words: Iterable[str]
+) -> tuple[bool, str | None]:
     """Проверка наличия бан-слов (без учёта регистра), возвращает (есть_запрет, слово)."""
     low = text.lower()
     for w in banned_words:
@@ -43,7 +47,9 @@ def contains_banned_words(text: str, banned_words: Iterable[str]) -> tuple[bool,
     return False, None
 
 
-def normalize_interests(raw: str, banned_words: Iterable[str]) -> tuple[List[str] | None, str | None]:
+def normalize_interests(
+    raw: str, banned_words: Iterable[str]
+) -> tuple[List[str] | None, str | None]:
     """
     Нормализует строку интересов:
     - сплит по запятым/точкам с запятой/переводам строки;
