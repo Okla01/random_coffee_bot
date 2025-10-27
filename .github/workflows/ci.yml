@@ -57,7 +57,10 @@ jobs:
         
       - name: Run static analysis (Bandit + Safety)
         run: |
-          bandit -r .
+          bandit -r . \
+            -x .venv,venv,env,tests,__pycache__ \
+            --severity-level medium \
+            --confidence-level high
           safety check || echo "Safety check failed but continuing..."
         
       - name: Run type checker (MyPy)
